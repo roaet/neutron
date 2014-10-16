@@ -15,6 +15,8 @@
 
 import testtools
 
+from oslo.config import cfg
+
 from neutron.api.v2 import attributes
 from neutron.common import exceptions as n_exc
 from neutron.tests import base
@@ -107,6 +109,12 @@ class TestAttributes(base.BaseTestCase):
 
         msg = attributes._validate_string("123456789", None)
         self.assertIsNone(msg)
+
+    def test_validate_string_xss(self):
+        original = cfg.CONF.sanitize_strings
+        msg = attributes._validate_string("An okay string")
+        self.assertIsNotNone(msg)
+        cfg.CONF.set_override('sanitize_strings', original)
 
     def test_validate_no_whitespace(self):
         data = 'no_white_space'

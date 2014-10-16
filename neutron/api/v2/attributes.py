@@ -16,11 +16,25 @@
 import netaddr
 import re
 
+from oslo.config import cfg
+
 from neutron.common import constants
 from neutron.common import exceptions as n_exc
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import uuidutils
 
+
+validation_opts = [
+    cfg.BoolOpt('sanitize_strings',
+                default=False,
+                help=_('Whether or not to accept strings with questionable'
+                       'symbols')),
+    cfg.StrOpt('unsafe_characters',
+                default='<>&\'"/',
+                help=_('The set of character to consider unsafe')),
+]
+CONF = cfg.CONF
+CONF.register_opts(validation_opts)
 
 LOG = logging.getLogger(__name__)
 
@@ -90,6 +104,14 @@ def _validate_string_or_none(data, max_len=None):
         return _validate_string(data, max_len=max_len)
 
 
+def _string_contains_xss_symbols(data):
+    # As defined by oswasp.org's guide for preventing XSS attacks
+    unsafe_characters = set(CONF.unsafe_characters)
+    if any((c in unsafe_characters) for c in data):
+        return True
+    return False
+
+
 def _validate_string(data, max_len=None):
     if not isinstance(data, basestring):
         msg = _("'%s' is not a valid string") % data
@@ -99,6 +121,13 @@ def _validate_string(data, max_len=None):
     if max_len is not None and len(data) > max_len:
         msg = (_("'%(data)s' exceeds maximum length of %(max_len)s") %
                {'data': data, 'max_len': max_len})
+        LOG.debug(msg)
+        return msg
+
+    if CONF.sanitize_strings and _string_contains_xss_symbols(data):
+        unsafe_characters = set(CONF.unsafe_characters)
+        msg = (_("'%(data)s' may not contain the following: %(unsafe)s") %
+               {'data': data, 'unsafe': ', '.join(unsafe_characters)})
         LOG.debug(msg)
         return msg
 
