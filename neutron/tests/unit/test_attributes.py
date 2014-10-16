@@ -15,6 +15,8 @@
 
 import testtools
 
+from oslo.config import cfg
+
 from neutron.api.v2 import attributes
 from neutron.common import exceptions as n_exc
 from neutron.tests import base
@@ -107,6 +109,44 @@ class TestAttributes(base.BaseTestCase):
 
         msg = attributes._validate_string("123456789", None)
         self.assertIsNone(msg)
+
+    def test_validate_string_xss_check_on(self):
+        original = cfg.CONF.sanitize_strings
+        cfg.CONF.set_override('sanitize_strings', True)
+        msg = attributes._validate_string("An okay string")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("<bad>")
+        self.assertIsNotNone(msg)
+        msg = attributes._validate_string("M&M")
+        self.assertIsNotNone(msg)
+        msg = attributes._validate_string('"This should fail"')
+        self.assertIsNotNone(msg)
+        msg = attributes._validate_string("'This should fail'")
+        self.assertIsNotNone(msg)
+        msg = attributes._validate_string("this/should/fail")
+        self.assertIsNotNone(msg)
+        msg = attributes._validate_string("this/should/fail")
+        self.assertTrue('may not contain the following' in msg)
+        cfg.CONF.set_override('sanitize_strings', original)
+
+    def test_validate_string_xss_check_off(self):
+        original = cfg.CONF.sanitize_strings
+        cfg.CONF.set_override('sanitize_strings', False)
+        msg = attributes._validate_string("An okay string")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("<bad>")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("M&M")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("\"This should fail\"")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("'This should fail'")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("this/should/fail")
+        self.assertIsNone(msg)
+        msg = attributes._validate_string("this/should/fail")
+        self.assertIsNone(msg)
+        cfg.CONF.set_override('sanitize_strings', original)
 
     def test_validate_no_whitespace(self):
         data = 'no_white_space'
